@@ -14,6 +14,7 @@ from dispersy.resolution import DynamicResolution, PublicResolution, LinearResol
 if __debug__:
     from dispersy.dprint import dprint
 
+
 class SquareBase(Community):
     def __init__(self, master, discovery):
         self._state = DummyState()
@@ -41,6 +42,9 @@ class SquareBase(Community):
         #         if self._square_info is None:
         #             self.set_square_info(u"Unknown", u"", "", (0, 0), 0)
         #     self._dispersy.callback.register(dummy_square_info)
+
+        self.events = getEventBroker(self)
+        self.global_events = getEventBroker(None)
 
     def initiate_meta_messages(self):
         return [Message(self, u"member-info", MemberAuthentication(encoding="sha1"), DynamicResolution(PublicResolution(), LinearResolution()), LastSyncDistribution(synchronization_direction=u"ASC", priority=16, history_size=1), CommunityDestination(node_count=0), MemberInfoPayload(), self._dispersy._generic_timeline_check, self.on_member_info, self.undo_member_info),
@@ -152,7 +156,7 @@ class SquareBase(Community):
 
     def undo_member_info(self, *args):
         pass
-    
+
     def set_square_info(self, title, description, thumbnail_hash, location, radius):
         if not (isinstance(title, unicode) and len(title.encode("UTF-8")) < 256):
             raise ValueError("invalid title")
@@ -182,6 +186,7 @@ class SquareBase(Community):
             if self._square_info is None or (message.distribution.global_time > self._square_info.distribution.global_time and message.packet > self._square_info.packet):
                 self._square_info = message
         # update GUI: square info has changed
+        self.events.squareInfoUpdated()
 
     def undo_square_info(self, *args):
         pass
@@ -209,10 +214,10 @@ class SquareBase(Community):
         self._discovery.add_implicitly_hot_text(messages)
 
         for message in messages:
-            pass            
+            pass
             # TODO store in local chat log database
             # update GUI: message has been received
-            # self.textMessageReceived.emit(message.payload.text)
+            self.events.messageReceived(message.payload)
 
     def undo_text(self, *args):
         pass
@@ -233,9 +238,17 @@ class SquareBase(Community):
                 self._dispersy.create_missing_message(self, candidate, member, hot.global_time)
 
 class SquareCommunity(SquareBase):
-    pass
+    def __init__(self, *argv, **kwargs):
+        super(SquareCommunity, self).__init__(*argv, **kwargs)
+        #Notify about new square creation
+        self.global_events.newCommunityCreated(self)
 
 class PreviewCommunity(SquareBase):
+    def __init__(self, *argv, **kwargs):
+        super(PreviewCommunity, self).__init__(*argv, **kwargs)
+        #Notify about new square creation
+        self.global_events.newPreviewCommunityCreated(self)
+
     def on_text(self, messages, mark_as_hot=False):
         return super(PreviewCommunity, self).on_text(messages, mark_as_hot=mark_as_hot)
 
@@ -247,3 +260,6 @@ class PreviewCommunity(SquareBase):
     # @property
     # def dispersy_enable_candidate_walker(self):
     #     return False
+
+
+from events import getEventBroker
